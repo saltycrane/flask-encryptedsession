@@ -11,6 +11,7 @@ setup(
     author_email='saltycrane@gmail.com',
     description='Flask encrypted cookie session',
     packages=find_packages(),
+    package_data={'flask_encryptedsession.tests': ['testkeys/*']},
     platforms='any',
     install_requires=[
         'Flask>=0.8',

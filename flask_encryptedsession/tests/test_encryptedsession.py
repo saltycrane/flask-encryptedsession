@@ -10,6 +10,7 @@
 
 from __future__ import with_statement
 
+import os.path
 import re
 import unittest
 from datetime import datetime
@@ -22,7 +23,8 @@ from flask_encryptedsession.encryptedsession import (
     EncryptedCookieSessionInterface)
 
 
-KEYS_DIR = '/tmp/keys'
+KEYS_DIR = os.path.join(
+    os.path.abspath(os.path.dirname(__file__)), 'testkeys')
 
 
 class BasicFunctionalityTestCase(FlaskTestCase):

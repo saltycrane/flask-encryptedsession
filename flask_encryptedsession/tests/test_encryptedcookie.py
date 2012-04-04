@@ -7,6 +7,7 @@
 
     :license: BSD, see LICENSE for more details.
 """
+import os.path
 import unittest
 
 from werkzeug.testsuite import WerkzeugTestCase
@@ -17,8 +18,9 @@ from werkzeug.wrappers import Request, Response
 from flask_encryptedsession.encryptedcookie import EncryptedCookie
 
 
-KEYS_DIR = '/tmp/keys'
-KEYS_DIR_BAD = '/tmp/badkeys'
+KEYS_DIR = os.path.join(
+    os.path.abspath(os.path.dirname(__file__)), 'testkeys')
+KEYS_DIR_BAD = 'testkeys_bad'
 
 
 class EncryptedCookieTestCase(WerkzeugTestCase):

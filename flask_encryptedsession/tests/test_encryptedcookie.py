@@ -1,9 +1,9 @@
 # -*- coding: utf-8 -*-
 """
-    werkzeug.testsuite.securecookie
-    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    flask_encryptedsession.tests.test_encryptedcookie
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-    Tests the secure cookie.
+    Tests the encrypted cookie.
 
     :license: BSD, see LICENSE for more details.
 """
@@ -14,13 +14,17 @@ from werkzeug.testsuite import WerkzeugTestCase
 from werkzeug.utils import parse_cookie
 from werkzeug.wrappers import Request, Response
 
-from flask_encryptedsession.encryptedcookie import SecureCookie
+from flask_encryptedsession.encryptedcookie import EncryptedCookie
 
 
-class SecureCookieTestCase(WerkzeugTestCase):
+KEYS_DIR = '/tmp/keys'
+KEYS_DIR_BAD = '/tmp/badkeys'
+
+
+class EncryptedCookieTestCase(WerkzeugTestCase):
 
     def test_basic_support(self):
-        c = SecureCookie(secret_key='foo')
+        c = EncryptedCookie(keys_location=KEYS_DIR)
         assert c.new
         assert not c.modified
         assert not c.should_save
@@ -29,14 +33,14 @@ class SecureCookieTestCase(WerkzeugTestCase):
         assert c.should_save
         s = c.serialize()
 
-        c2 = SecureCookie.unserialize(s, 'foo')
+        c2 = EncryptedCookie.unserialize(s, KEYS_DIR)
         assert c is not c2
         assert not c2.new
         assert not c2.modified
         assert not c2.should_save
         assert c2 == c
 
-        c3 = SecureCookie.unserialize(s, 'wrong foo')
+        c3 = EncryptedCookie.unserialize(s, KEYS_DIR_BAD)
         assert not c3.modified
         assert not c3.new
         assert c3 == {}
@@ -44,23 +48,23 @@ class SecureCookieTestCase(WerkzeugTestCase):
     def test_wrapper_support(self):
         req = Request.from_values()
         resp = Response()
-        c = SecureCookie.load_cookie(req, secret_key='foo')
+        c = EncryptedCookie.load_cookie(req, keys_location=KEYS_DIR)
         assert c.new
         c['foo'] = 42
-        assert c.secret_key == 'foo'
+        assert c.keys_location == KEYS_DIR
         c.save_cookie(resp)
 
         req = Request.from_values(headers={
             'Cookie':  'session="%s"' % parse_cookie(resp.headers['set-cookie'])['session']
         })
-        c2 = SecureCookie.load_cookie(req, secret_key='foo')
+        c2 = EncryptedCookie.load_cookie(req, keys_location=KEYS_DIR)
         assert not c2.new
         assert c2 == c
 
 
 def suite():
     suite = unittest.TestSuite()
-    suite.addTest(unittest.makeSuite(SecureCookieTestCase))
+    suite.addTest(unittest.makeSuite(EncryptedCookieTestCase))
     return suite
 
 

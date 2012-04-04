@@ -1,36 +1,41 @@
 # -*- coding: utf-8 -*-
 """
-    flask.testsuite.basic
-    ~~~~~~~~~~~~~~~~~~~~~
+    flask_encryptedsession.tests.test_encryptedsession
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-    The basic functionality.
+    Tests the encrypted session.
 
-    :copyright: (c) 2011 by Armin Ronacher.
     :license: BSD, see LICENSE for more details.
 """
 
 from __future__ import with_statement
 
 import re
-import flask
 import unittest
 from datetime import datetime
+
+import flask
 from flask.testsuite import FlaskTestCase
 from werkzeug.http import parse_date
 
-from flask_encryptedsession.encryptedsession import SecureCookieSessionInterface
+from flask_encryptedsession.encryptedsession import (
+    EncryptedCookieSessionInterface)
+
+
+KEYS_DIR = '/tmp/keys'
 
 
 class BasicFunctionalityTestCase(FlaskTestCase):
-
     def test_session(self):
         app = flask.Flask(__name__)
-        app.session_interface = SecureCookieSessionInterface()
-        app.secret_key = 'testkey'
+        app.session_interface = EncryptedCookieSessionInterface()
+        app.config['KEYS_LOCATION'] = KEYS_DIR
+
         @app.route('/set', methods=['POST'])
         def set():
             flask.session['value'] = flask.request.form['value']
             return 'value set'
+
         @app.route('/get')
         def get():
             return flask.session['value']
@@ -41,11 +46,12 @@ class BasicFunctionalityTestCase(FlaskTestCase):
 
     def test_session_using_server_name(self):
         app = flask.Flask(__name__)
-        app.session_interface = SecureCookieSessionInterface()
+        app.session_interface = EncryptedCookieSessionInterface()
         app.config.update(
-            SECRET_KEY='foo',
+            KEYS_LOCATION=KEYS_DIR,
             SERVER_NAME='example.com'
         )
+
         @app.route('/')
         def index():
             flask.session['testing'] = 42
@@ -56,11 +62,12 @@ class BasicFunctionalityTestCase(FlaskTestCase):
 
     def test_session_using_server_name_and_port(self):
         app = flask.Flask(__name__)
-        app.session_interface = SecureCookieSessionInterface()
+        app.session_interface = EncryptedCookieSessionInterface()
         app.config.update(
-            SECRET_KEY='foo',
+            KEYS_LOCATION=KEYS_DIR,
             SERVER_NAME='example.com:8080'
         )
+
         @app.route('/')
         def index():
             flask.session['testing'] = 42
@@ -74,17 +81,19 @@ class BasicFunctionalityTestCase(FlaskTestCase):
             def __init__(self, app, prefix):
                 self.app = app
                 self.prefix = prefix
+
             def __call__(self, environ, start_response):
                 environ['SCRIPT_NAME'] = self.prefix
                 return self.app(environ, start_response)
 
         app = flask.Flask(__name__)
-        app.session_interface = SecureCookieSessionInterface()
+        app.session_interface = EncryptedCookieSessionInterface()
         app.wsgi_app = PrefixPathMiddleware(app.wsgi_app, '/bar')
         app.config.update(
-            SECRET_KEY='foo',
+            KEYS_LOCATION=KEYS_DIR,
             APPLICATION_ROOT='/bar'
         )
+
         @app.route('/')
         def index():
             flask.session['testing'] = 42
@@ -94,9 +103,9 @@ class BasicFunctionalityTestCase(FlaskTestCase):
 
     def test_session_using_session_settings(self):
         app = flask.Flask(__name__)
-        app.session_interface = SecureCookieSessionInterface()
+        app.session_interface = EncryptedCookieSessionInterface()
         app.config.update(
-            SECRET_KEY='foo',
+            KEYS_LOCATION=KEYS_DIR,
             SERVER_NAME='www.example.com:8080',
             APPLICATION_ROOT='/test',
             SESSION_COOKIE_DOMAIN='.example.com',
@@ -104,6 +113,7 @@ class BasicFunctionalityTestCase(FlaskTestCase):
             SESSION_COOKIE_SECURE=True,
             SESSION_COOKIE_PATH='/'
         )
+
         @app.route('/')
         def index():
             flask.session['testing'] = 42
@@ -117,7 +127,8 @@ class BasicFunctionalityTestCase(FlaskTestCase):
 
     def test_missing_session(self):
         app = flask.Flask(__name__)
-        app.session_interface = SecureCookieSessionInterface()
+        app.session_interface = EncryptedCookieSessionInterface()
+
         def expect_exception(f, *args, **kwargs):
             try:
                 f(*args, **kwargs)
@@ -133,8 +144,9 @@ class BasicFunctionalityTestCase(FlaskTestCase):
     def test_session_expiration(self):
         permanent = True
         app = flask.Flask(__name__)
-        app.session_interface = SecureCookieSessionInterface()
-        app.secret_key = 'testkey'
+        app.session_interface = EncryptedCookieSessionInterface()
+        app.config.update(KEYS_LOCATION=KEYS_DIR)
+
         @app.route('/')
         def index():
             flask.session['test'] = 42
@@ -166,8 +178,8 @@ class BasicFunctionalityTestCase(FlaskTestCase):
 
     def test_flashes(self):
         app = flask.Flask(__name__)
-        app.session_interface = SecureCookieSessionInterface()
-        app.secret_key = 'testkey'
+        app.session_interface = EncryptedCookieSessionInterface()
+        app.config.update(KEYS_LOCATION=KEYS_DIR)
 
         with app.test_request_context():
             self.assert_(not flask.session.modified)

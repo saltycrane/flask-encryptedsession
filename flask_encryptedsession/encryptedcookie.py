@@ -1,21 +1,22 @@
 # -*- coding: utf-8 -*-
 r"""
-    werkzeug.contrib.securecookie
-    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    flask_encryptedsession.encryptedcookie
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-    This module implements a cookie that is not alterable from the client
-    because it adds a checksum the server checks for.  You can use it as
-    session replacement if all you have is a user id or something to mark
-    a logged in user.
+    This module implements an encrypted cookie using the keyczar libary.
 
-    Keep in mind that the data is still readable from the client as a
-    normal cookie is.  However you don't have to store and flush the
-    sessions you have at the server.
+    Create keyczar keys
+    ===================
 
-    Example usage:
+        $ mkdir -p /tmp/keys
+        $ keyczart create --location=/tmp/keys --purpose=crypt
+        $ keyczart addkey --location=/tmp/keys --status=primary
 
-    >>> from werkzeug.contrib.securecookie import SecureCookie
-    >>> x = SecureCookie({"foo": 42, "baz": (1, 2, 3)}, "deadbeef")
+    Example usage
+    =============
+
+    >>> from flask_encryptedsession.encryptedcookie import EncryptedCookie
+    >>> x = EncryptedCookie({"foo": 42, "baz": (1, 2, 3)}, "/tmp/keys")
 
     Dumping into a string so that one can store it in a cookie:
 
@@ -23,29 +24,25 @@ r"""
 
     Loading from that string again:
 
-    >>> x = SecureCookie.unserialize(value, "deadbeef")
+    >>> x = EncryptedCookie.unserialize(value, "/tmp/keys")
     >>> x["baz"]
     (1, 2, 3)
 
-    If someone modifies the cookie and the checksum is wrong the unserialize
-    method will fail silently and return a new empty `SecureCookie` object.
-
-    Keep in mind that the values will be visible in the cookie so do not
-    store data in a cookie you don't want the user to see.
+    If a bad key is provided, the unserialize method will fail silently and
+    return a new empty `EncryptedCookie` object.
 
     Application Integration
     =======================
 
     If you are using the werkzeug request objects you could integrate the
-    secure cookie into your application like this::
+    encrypted cookie into your application like this::
 
         from werkzeug.utils import cached_property
         from werkzeug.wrappers import BaseRequest
-        from werkzeug.contrib.securecookie import SecureCookie
+        from flask_encryptedsession.encryptedcookie import EncryptedCookie
 
-        # don't use this key but a different one; you could just use
-        # os.urandom(20) to get something random
-        SECRET_KEY = '\xfa\xdd\xb8z\xae\xe0}4\x8b\xea'
+        # generate keyczar keys and specify the keys directory here
+        KEYS_DIR = '/tmp/keys'
 
         class Request(BaseRequest):
 
@@ -53,8 +50,8 @@ r"""
             def client_session(self):
                 data = self.cookies.get('session_data')
                 if not data:
-                    return SecureCookie(secret_key=SECRET_KEY)
-                return SecureCookie.unserialize(data, SECRET_KEY)
+                    return EncryptedCookie(keys_location=KEYS_DIR)
+                return EncryptedCookie.unserialize(data, KEYS_DIR)
 
         def application(environ, start_response):
             request = Request(environ, start_response)
@@ -74,7 +71,7 @@ r"""
 
             @cached_property
             def client_session(self):
-                return SecureCookie.load_cookie(self, secret_key=COOKIE_SECRET)
+                return EncryptedCookie.load_cookie(self, keys_location=KEYS_DIR)
 
         def application(environ, start_response):
             request = Request(environ, start_response)
@@ -85,34 +82,27 @@ r"""
             request.client_session.save_cookie(response)
             return response(environ, start_response)
 
-    :copyright: (c) 2011 by the Werkzeug Team, see AUTHORS for more details.
     :license: BSD, see LICENSE for more details.
 """
-import cPickle as pickle
-from hmac import new as hmac
 from time import time
-from werkzeug.urls import url_quote_plus, url_unquote_plus
+
+from keyczar import keyczar
 from werkzeug._internal import _date_to_unix
+from werkzeug.contrib.securecookie import SecureCookie
 from werkzeug.contrib.sessions import ModificationTrackingDict
-from werkzeug.security import safe_str_cmp
-
-
-from hashlib import sha1 as _default_hash
+from werkzeug.urls import url_quote_plus, url_unquote_plus
 
 
 class UnquoteError(Exception):
     """Internal exception used to signal failures on quoting."""
 
 
-class SecureCookie(ModificationTrackingDict):
-    """Represents a secure cookie.  You can subclass this class and provide
-    an alternative mac method.  The import thing is that the mac method
-    is a function with a similar interface to the hashlib.  Required
-    methods are update() and digest().
+class EncryptedCookie(SecureCookie):
+    """Represents an encrypted cookie.
 
     Example usage:
 
-    >>> x = SecureCookie({"foo": 42, "baz": (1, 2, 3)}, "deadbeef")
+    >>> x = EncryptedCookie({"foo": 42, "baz": (1, 2, 3)}, "/tmp/keys")
     >>> x["foo"]
     42
     >>> x["baz"]
@@ -122,84 +112,29 @@ class SecureCookie(ModificationTrackingDict):
     True
 
     :param data: the initial data.  Either a dict, list of tuples or `None`.
-    :param secret_key: the secret key.  If not set `None` or not specified
+    :param keys_location: the directory containing the keyczar keys.
+                       If not set `None` or not specified
                        it has to be set before :meth:`serialize` is called.
     :param new: The initial value of the `new` flag.
     """
 
-    #: The hash method to use.  This has to be a module with a new function
-    #: or a function that creates a hashlib object.  Such as `hashlib.md5`
-    #: Subclasses can override this attribute.  The default hash is sha1.
-    #: Make sure to wrap this in staticmethod() if you store an arbitrary
-    #: function there such as hashlib.sha1 which  might be implemented
-    #: as a function.
-    hash_method = staticmethod(_default_hash)
-
-    #: the module used for serialization.  Unless overriden by subclasses
-    #: the standard pickle module is used.
-    serialization_method = pickle
-
-    #: if the contents should be base64 quoted.  This can be disabled if the
-    #: serialization process returns cookie safe strings only.
-    quote_base64 = True
-
-    def __init__(self, data=None, secret_key=None, new=True):
+    def __init__(self, data=None, keys_location=None, new=True):
         ModificationTrackingDict.__init__(self, data or ())
-        # explicitly convert it into a bytestring because python 2.6
-        # no longer performs an implicit string conversion on hmac
-        if secret_key is not None:
-            secret_key = str(secret_key)
-        self.secret_key = secret_key
+        self.keys_location = keys_location
         self.new = new
 
-    def __repr__(self):
-        return '<%s %s%s>' % (
-            self.__class__.__name__,
-            dict.__repr__(self),
-            self.should_save and '*' or ''
-        )
+    @staticmethod
+    def _encrypt(string, keys_location):
+        crypter = keyczar.Crypter.Read(keys_location)
+        return crypter.Encrypt(string)
 
-    @property
-    def should_save(self):
-        """True if the session should be saved.  By default this is only true
-        for :attr:`modified` cookies, not :attr:`new`.
-        """
-        return self.modified
-
-    @classmethod
-    def quote(cls, value):
-        """Quote the value for the cookie.  This can be any object supported
-        by :attr:`serialization_method`.
-
-        :param value: the value to quote.
-        """
-        if cls.serialization_method is not None:
-            value = cls.serialization_method.dumps(value)
-        if cls.quote_base64:
-            value = ''.join(value.encode('base64').splitlines()).strip()
-        return value
-
-    @classmethod
-    def unquote(cls, value):
-        """Unquote the value for the cookie.  If unquoting does not work a
-        :exc:`UnquoteError` is raised.
-
-        :param value: the value to unquote.
-        """
-        try:
-            if cls.quote_base64:
-                value = value.decode('base64')
-            if cls.serialization_method is not None:
-                value = cls.serialization_method.loads(value)
-            return value
-        except Exception:
-            # unfortunately pickle and other serialization modules can
-            # cause pretty every error here.  if we get one we catch it
-            # and convert it into an UnquoteError
-            raise UnquoteError()
+    @staticmethod
+    def _decrypt(string, keys_location):
+        crypter = keyczar.Crypter.Read(keys_location)
+        return crypter.Decrypt(string)
 
     def serialize(self, expires=None):
-        """Serialize the secure cookie into a string.
+        """Serialize the cookie into a string and encrypt.
 
         If expires is provided, the session will be automatically invalidated
         after expiration when you unseralize it. This provides better
@@ -208,42 +143,38 @@ class SecureCookie(ModificationTrackingDict):
         :param expires: an optional expiration date for the cookie (a
                         :class:`datetime.datetime` object)
         """
-        if self.secret_key is None:
-            raise RuntimeError('no secret key defined')
+        if self.keys_location is None:
+            raise RuntimeError('no keys location defined')
         if expires:
             self['_expires'] = _date_to_unix(expires)
         result = []
-        mac = hmac(self.secret_key, None, self.hash_method)
         for key, value in sorted(self.items()):
             result.append('%s=%s' % (
                 url_quote_plus(key),
                 self.quote(value)
             ))
-            mac.update('|' + result[-1])
-        return '%s?%s' % (
-            mac.digest().encode('base64').strip(),
-            '&'.join(result)
-        )
+        result = '&'.join(result)
+        return self._encrypt(result, self.keys_location)
 
     @classmethod
-    def unserialize(cls, string, secret_key):
-        """Load the secure cookie from a serialized string.
+    def unserialize(cls, string, keys_location):
+        """Decrypt and load the cookie from a serialized string.
 
-        :param string: the cookie value to unserialize.
-        :param secret_key: the secret key used to serialize the cookie.
-        :return: a new :class:`SecureCookie`.
+        :param string: the cookie value to decrypt and deserialize.
+        :param keys_location: the location of the keyczar keys
+        :return: a new :class:`EncryptedCookie`.
         """
         if isinstance(string, unicode):
             string = string.encode('utf-8', 'replace')
+
         try:
-            base64_hash, data = string.split('?', 1)
-        except (ValueError, IndexError):
+            data = cls._decrypt(string, keys_location)
+        except:
+            # fail silently and return new empty EncryptedCookie object
             items = ()
         else:
             items = {}
-            mac = hmac(secret_key, None, cls.hash_method)
             for item in data.split('&'):
-                mac.update('|' + item)
                 if not '=' in item:
                     items = None
                     break
@@ -256,62 +187,36 @@ class SecureCookie(ModificationTrackingDict):
                     pass
                 items[key] = value
 
-            # no parsing error and the mac looks okay, we can now
-            # sercurely unpickle our cookie.
+            # deserialize
             try:
-                client_hash = base64_hash.decode('base64')
-            except Exception:
-                items = client_hash = None
-            if items is not None and safe_str_cmp(client_hash, mac.digest()):
-                try:
-                    for key, value in items.iteritems():
-                        items[key] = cls.unquote(value)
-                except UnquoteError:
-                    items = ()
-                else:
-                    if '_expires' in items:
-                        if time() > items['_expires']:
-                            items = ()
-                        else:
-                            del items['_expires']
-            else:
+                for key, value in items.iteritems():
+                    items[key] = cls.unquote(value)
+            except UnquoteError:
                 items = ()
-        return cls(items, secret_key, False)
+            else:
+                # check if cookie is expired
+                if '_expires' in items:
+                    if time() > items['_expires']:
+                        items = ()
+                    else:
+                        del items['_expires']
+
+        return cls(items, keys_location, False)
 
     @classmethod
-    def load_cookie(cls, request, key='session', secret_key=None):
-        """Loads a :class:`SecureCookie` from a cookie in request.  If the
-        cookie is not set, a new :class:`SecureCookie` instanced is
+    def load_cookie(cls, request, key='session', keys_location=None):
+        """Loads a :class:`EncryptedCookie` from a cookie in request. If the
+        cookie is not set, a new :class:`EncryptedCookie` instance is
         returned.
 
         :param request: a request object that has a `cookies` attribute
                         which is a dict of all cookie values.
         :param key: the name of the cookie.
-        :param secret_key: the secret key used to unquote the cookie.
+        :param keys_location: the location of the keyczar keys
                            Always provide the value even though it has
                            no default!
         """
         data = request.cookies.get(key)
         if not data:
-            return cls(secret_key=secret_key)
-        return cls.unserialize(data, secret_key)
-
-    def save_cookie(self, response, key='session', expires=None,
-                    session_expires=None, max_age=None, path='/', domain=None,
-                    secure=None, httponly=False, force=False):
-        """Saves the SecureCookie in a cookie on response object.  All
-        parameters that are not described here are forwarded directly
-        to :meth:`~BaseResponse.set_cookie`.
-
-        :param response: a response object that has a
-                         :meth:`~BaseResponse.set_cookie` method.
-        :param key: the name of the cookie.
-        :param session_expires: the expiration date of the secure cookie
-                                stored information.  If this is not provided
-                                the cookie `expires` date is used instead.
-        """
-        if force or self.should_save:
-            data = self.serialize(session_expires or expires)
-            response.set_cookie(key, data, expires=expires, max_age=max_age,
-                                path=path, domain=domain, secure=secure,
-                                httponly=httponly)
+            return cls(keys_location=keys_location)
+        return cls.unserialize(data, keys_location)

@@ -1,38 +1,36 @@
 # -*- coding: utf-8 -*-
 """
-    flask.sessions
-    ~~~~~~~~~~~~~~
+    flask_encryptedsession.encryptedsession
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-    Implements cookie based sessions based on Werkzeug's secure cookie
+    Implements cookie based sessions based on Werkzeug's encrypted cookie
     system.
 
-    :copyright: (c) 2011 by Armin Ronacher.
     :license: BSD, see LICENSE for more details.
 """
-
 from flask.sessions import SessionMixin, SessionInterface
 
-from flask_encryptedsession.encryptedcookie import SecureCookie
+from flask_encryptedsession.encryptedcookie import EncryptedCookie
 
 
-class SecureCookieSession(SecureCookie, SessionMixin):
+class EncryptedCookieSession(EncryptedCookie, SessionMixin):
     """Expands the session with support for switching between permanent
     and non-permanent sessions.
     """
 
 
-class SecureCookieSessionInterface(SessionInterface):
-    """The cookie session interface that uses the Werkzeug securecookie
+class EncryptedCookieSessionInterface(SessionInterface):
+    """The cookie session interface that uses the Werkzeug encryptedcookie
     as client side session backend.
     """
-    session_class = SecureCookieSession
+    session_class = EncryptedCookieSession
 
     def open_session(self, app, request):
-        key = app.secret_key
-        if key is not None:
+        keys_location = app.config.get('KEYS_LOCATION')
+        if keys_location is not None:
             return self.session_class.load_cookie(request,
                                                   app.session_cookie_name,
-                                                  secret_key=key)
+                                                  keys_location=keys_location)
 
     def save_session(self, app, session, response):
         expires = self.get_expiration_time(app, session)

@@ -5,7 +5,6 @@
 
     Tests the secure cookie.
 
-    :copyright: (c) 2011 by Armin Ronacher.
     :license: BSD, see LICENSE for more details.
 """
 import unittest
@@ -14,7 +13,8 @@ from werkzeug.testsuite import WerkzeugTestCase
 
 from werkzeug.utils import parse_cookie
 from werkzeug.wrappers import Request, Response
-from werkzeug.contrib.securecookie import SecureCookie
+
+from flask_encryptedsession.encryptedcookie import SecureCookie
 
 
 class SecureCookieTestCase(WerkzeugTestCase):
@@ -62,3 +62,7 @@ def suite():
     suite = unittest.TestSuite()
     suite.addTest(unittest.makeSuite(SecureCookieTestCase))
     return suite
+
+
+if __name__ == '__main__':
+    unittest.main()

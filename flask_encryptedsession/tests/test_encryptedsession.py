@@ -29,7 +29,7 @@ class BasicFunctionalityTestCase(FlaskTestCase):
     def test_session(self):
         app = flask.Flask(__name__)
         app.session_interface = EncryptedCookieSessionInterface()
-        app.config['KEYS_LOCATION'] = KEYS_DIR
+        app.config['SESSION_ENCRYPTION_KEYS_LOCATION'] = KEYS_DIR
 
         @app.route('/set', methods=['POST'])
         def set():
@@ -48,7 +48,7 @@ class BasicFunctionalityTestCase(FlaskTestCase):
         app = flask.Flask(__name__)
         app.session_interface = EncryptedCookieSessionInterface()
         app.config.update(
-            KEYS_LOCATION=KEYS_DIR,
+            SESSION_ENCRYPTION_KEYS_LOCATION=KEYS_DIR,
             SERVER_NAME='example.com'
         )
 
@@ -64,7 +64,7 @@ class BasicFunctionalityTestCase(FlaskTestCase):
         app = flask.Flask(__name__)
         app.session_interface = EncryptedCookieSessionInterface()
         app.config.update(
-            KEYS_LOCATION=KEYS_DIR,
+            SESSION_ENCRYPTION_KEYS_LOCATION=KEYS_DIR,
             SERVER_NAME='example.com:8080'
         )
 
@@ -90,7 +90,7 @@ class BasicFunctionalityTestCase(FlaskTestCase):
         app.session_interface = EncryptedCookieSessionInterface()
         app.wsgi_app = PrefixPathMiddleware(app.wsgi_app, '/bar')
         app.config.update(
-            KEYS_LOCATION=KEYS_DIR,
+            SESSION_ENCRYPTION_KEYS_LOCATION=KEYS_DIR,
             APPLICATION_ROOT='/bar'
         )
 
@@ -105,7 +105,7 @@ class BasicFunctionalityTestCase(FlaskTestCase):
         app = flask.Flask(__name__)
         app.session_interface = EncryptedCookieSessionInterface()
         app.config.update(
-            KEYS_LOCATION=KEYS_DIR,
+            SESSION_ENCRYPTION_KEYS_LOCATION=KEYS_DIR,
             SERVER_NAME='www.example.com:8080',
             APPLICATION_ROOT='/test',
             SESSION_COOKIE_DOMAIN='.example.com',
@@ -145,7 +145,7 @@ class BasicFunctionalityTestCase(FlaskTestCase):
         permanent = True
         app = flask.Flask(__name__)
         app.session_interface = EncryptedCookieSessionInterface()
-        app.config.update(KEYS_LOCATION=KEYS_DIR)
+        app.config.update(SESSION_ENCRYPTION_KEYS_LOCATION=KEYS_DIR)
 
         @app.route('/')
         def index():
@@ -179,7 +179,7 @@ class BasicFunctionalityTestCase(FlaskTestCase):
     def test_flashes(self):
         app = flask.Flask(__name__)
         app.session_interface = EncryptedCookieSessionInterface()
-        app.config.update(KEYS_LOCATION=KEYS_DIR)
+        app.config.update(SESSION_ENCRYPTION_KEYS_LOCATION=KEYS_DIR)
 
         with app.test_request_context():
             self.assert_(not flask.session.modified)

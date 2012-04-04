@@ -90,7 +90,6 @@ from keyczar import keyczar
 from werkzeug._internal import _date_to_unix
 from werkzeug.contrib.securecookie import SecureCookie
 from werkzeug.contrib.sessions import ModificationTrackingDict
-from werkzeug.urls import url_quote_plus, url_unquote_plus
 
 
 class UnquoteError(Exception):
@@ -147,13 +146,7 @@ class EncryptedCookie(SecureCookie):
             raise RuntimeError('no keys location defined')
         if expires:
             self['_expires'] = _date_to_unix(expires)
-        result = []
-        for key, value in sorted(self.items()):
-            result.append('%s=%s' % (
-                url_quote_plus(key),
-                self.quote(value)
-            ))
-        result = '&'.join(result)
+        result = self.serialization_method.dumps(dict(self))
         return self._encrypt(result, self.keys_location)
 
     @classmethod
@@ -173,33 +166,13 @@ class EncryptedCookie(SecureCookie):
             # fail silently and return new empty EncryptedCookie object
             items = ()
         else:
-            items = {}
-            for item in data.split('&'):
-                if not '=' in item:
-                    items = None
-                    break
-                key, value = item.split('=', 1)
-                # try to make the key a string
-                key = url_unquote_plus(key)
-                try:
-                    key = str(key)
-                except UnicodeError:
-                    pass
-                items[key] = value
-
-            # deserialize
-            try:
-                for key, value in items.iteritems():
-                    items[key] = cls.unquote(value)
-            except UnquoteError:
-                items = ()
-            else:
-                # check if cookie is expired
-                if '_expires' in items:
-                    if time() > items['_expires']:
-                        items = ()
-                    else:
-                        del items['_expires']
+            items = cls.serialization_method.loads(data)
+            # check if cookie is expired
+            if '_expires' in items:
+                if time() > items['_expires']:
+                    items = ()
+                else:
+                    del items['_expires']
 
         return cls(items, keys_location, False)
 

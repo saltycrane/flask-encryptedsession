@@ -26,7 +26,7 @@ class EncryptedCookieSessionInterface(SessionInterface):
     session_class = EncryptedCookieSession
 
     def open_session(self, app, request):
-        keys_location = app.config.get('KEYS_LOCATION')
+        keys_location = app.config.get('SESSION_ENCRYPTION_KEYS_LOCATION')
         if keys_location is not None:
             return self.session_class.load_cookie(request,
                                                   app.session_cookie_name,

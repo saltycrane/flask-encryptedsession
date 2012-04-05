@@ -13,19 +13,25 @@ python-keyczar.
 
 Run tests
 =========
+
 ::
+
     $ python setup.py test
 
 Create keyczar keys
 ===================
+
 ::
+
     $ mkdir -p /tmp/keys
     $ keyczart create --location=/tmp/keys --purpose=crypt
     $ keyczart addkey --location=/tmp/keys --status=primary
 
 Configure Flask app
 ===================
+
 ::
+
     from flask import Flask
     from flask_encryptedsession.encryptedsession import (
         EncryptedCookieSessionInterface)

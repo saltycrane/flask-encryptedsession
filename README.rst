@@ -1,7 +1,7 @@
 Flask-EncryptedSession is a replacement for the default Flask session. In
-addition to signing, it encrypts the cookie using the keyczar libary. It is
-based on (and provides a similar interface to) Werkzeug's SecureCookie, Flask's
-SecureCookieSession and SecureCookieSessionInterface.
+addition to signing, it encrypts the cookie using the keyczar library. It is
+based on (and provides a similar interface to) Werkzeug's SecureCookie and
+Flask's SecureCookieSession and SecureCookieSessionInterface.
 
 Install
 =======

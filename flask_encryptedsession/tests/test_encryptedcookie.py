@@ -20,13 +20,14 @@ from flask_encryptedsession.encryptedcookie import EncryptedCookie
 
 KEYS_DIR = os.path.join(
     os.path.abspath(os.path.dirname(__file__)), 'testkeys')
-KEYS_DIR_BAD = 'testkeys_bad'
+KEYS_DIR_BAD = os.path.join(
+    os.path.abspath(os.path.dirname(__file__)), 'testkeys_bad')
 
 
 class EncryptedCookieTestCase(WerkzeugTestCase):
 
     def test_basic_support(self):
-        c = EncryptedCookie(keys_location=KEYS_DIR)
+        c = EncryptedCookie(crypter_or_keys_location=KEYS_DIR)
         assert c.new
         assert not c.modified
         assert not c.should_save
@@ -50,16 +51,16 @@ class EncryptedCookieTestCase(WerkzeugTestCase):
     def test_wrapper_support(self):
         req = Request.from_values()
         resp = Response()
-        c = EncryptedCookie.load_cookie(req, keys_location=KEYS_DIR)
+        c = EncryptedCookie.load_cookie(req, crypter_or_keys_location=KEYS_DIR)
         assert c.new
         c['foo'] = 42
-        assert c.keys_location == KEYS_DIR
+        assert c.crypter is not None
         c.save_cookie(resp)
 
         req = Request.from_values(headers={
             'Cookie':  'session="%s"' % parse_cookie(resp.headers['set-cookie'])['session']
         })
-        c2 = EncryptedCookie.load_cookie(req, keys_location=KEYS_DIR)
+        c2 = EncryptedCookie.load_cookie(req, crypter_or_keys_location=KEYS_DIR)
         assert not c2.new
         assert c2 == c
 

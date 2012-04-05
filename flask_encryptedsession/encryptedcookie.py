@@ -117,20 +117,20 @@ class EncryptedCookie(SecureCookie):
     :param new: The initial value of the `new` flag.
     """
 
-    def __init__(self, data=None, keys_location=None, new=True):
+    def __init__(self, data=None, crypter_or_keys_location=None, new=True):
         ModificationTrackingDict.__init__(self, data or ())
-        self.keys_location = keys_location
+        self.crypter = self._get_crypter(crypter_or_keys_location)
         self.new = new
 
     @staticmethod
-    def _encrypt(string, keys_location):
-        crypter = keyczar.Crypter.Read(keys_location)
-        return crypter.Encrypt(string)
-
-    @staticmethod
-    def _decrypt(string, keys_location):
-        crypter = keyczar.Crypter.Read(keys_location)
-        return crypter.Decrypt(string)
+    def _get_crypter(crypter_or_keys_location):
+        """
+        :param crypter_or_keys_location: may be None, a string, or a
+            keyczar.Crypter instance.
+        """
+        if isinstance(crypter_or_keys_location, basestring):
+            return keyczar.Crypter.Read(crypter_or_keys_location)
+        return crypter_or_keys_location
 
     def serialize(self, expires=None):
         """Serialize the cookie into a string and encrypt.
@@ -142,29 +142,33 @@ class EncryptedCookie(SecureCookie):
         :param expires: an optional expiration date for the cookie (a
                         :class:`datetime.datetime` object)
         """
-        if self.keys_location is None:
-            raise RuntimeError('no keys location defined')
+        if self.crypter is None:
+            raise RuntimeError(
+                'Crypter has not been initialized with the keys location.')
         if expires:
             self['_expires'] = _date_to_unix(expires)
         result = self.serialization_method.dumps(dict(self))
-        return self._encrypt(result, self.keys_location)
+        return self.crypter.Encrypt(result)
 
     @classmethod
-    def unserialize(cls, string, keys_location):
+    def unserialize(cls, string, crypter_or_keys_location):
         """Decrypt and load the cookie from a serialized string.
 
         :param string: the cookie value to decrypt and deserialize.
-        :param keys_location: the location of the keyczar keys
+        :param crypter_or_keys_location: the Crypter instance or the location
+            of the keyczar keys
         :return: a new :class:`EncryptedCookie`.
         """
         if isinstance(string, unicode):
             string = string.encode('utf-8', 'replace')
 
         try:
-            data = cls._decrypt(string, keys_location)
+            crypter = cls._get_crypter(crypter_or_keys_location)
+            data = crypter.Decrypt(string)
         except:
             # fail silently and return new empty EncryptedCookie object
             items = ()
+            crypter = None
         else:
             items = cls.serialization_method.loads(data)
             # check if cookie is expired
@@ -174,10 +178,10 @@ class EncryptedCookie(SecureCookie):
                 else:
                     del items['_expires']
 
-        return cls(items, keys_location, False)
+        return cls(items, crypter, False)
 
     @classmethod
-    def load_cookie(cls, request, key='session', keys_location=None):
+    def load_cookie(cls, request, key='session', crypter_or_keys_location=None):
         """Loads a :class:`EncryptedCookie` from a cookie in request. If the
         cookie is not set, a new :class:`EncryptedCookie` instance is
         returned.
@@ -185,11 +189,12 @@ class EncryptedCookie(SecureCookie):
         :param request: a request object that has a `cookies` attribute
                         which is a dict of all cookie values.
         :param key: the name of the cookie.
-        :param keys_location: the location of the keyczar keys
+        :param crypter_or_keys_location: the Crypter instance or the location
+                           of the keyczar keys.
                            Always provide the value even though it has
                            no default!
         """
         data = request.cookies.get(key)
         if not data:
-            return cls(keys_location=keys_location)
-        return cls.unserialize(data, keys_location)
+            return cls(crypter_or_keys_location=crypter_or_keys_location)
+        return cls.unserialize(data, crypter_or_keys_location)

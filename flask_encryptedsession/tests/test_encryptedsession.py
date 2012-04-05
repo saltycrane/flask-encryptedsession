@@ -25,13 +25,14 @@ from flask_encryptedsession.encryptedsession import (
 
 KEYS_DIR = os.path.join(
     os.path.abspath(os.path.dirname(__file__)), 'testkeys')
+KEYS_DIR_BAD = os.path.join(
+    os.path.abspath(os.path.dirname(__file__)), 'testkeys_bad')
 
 
 class BasicFunctionalityTestCase(FlaskTestCase):
     def test_session(self):
         app = flask.Flask(__name__)
-        app.session_interface = EncryptedCookieSessionInterface()
-        app.config['SESSION_ENCRYPTION_KEYS_LOCATION'] = KEYS_DIR
+        app.session_interface = EncryptedCookieSessionInterface(KEYS_DIR)
 
         @app.route('/set', methods=['POST'])
         def set():
@@ -48,9 +49,8 @@ class BasicFunctionalityTestCase(FlaskTestCase):
 
     def test_session_using_server_name(self):
         app = flask.Flask(__name__)
-        app.session_interface = EncryptedCookieSessionInterface()
+        app.session_interface = EncryptedCookieSessionInterface(KEYS_DIR)
         app.config.update(
-            SESSION_ENCRYPTION_KEYS_LOCATION=KEYS_DIR,
             SERVER_NAME='example.com'
         )
 
@@ -64,9 +64,8 @@ class BasicFunctionalityTestCase(FlaskTestCase):
 
     def test_session_using_server_name_and_port(self):
         app = flask.Flask(__name__)
-        app.session_interface = EncryptedCookieSessionInterface()
+        app.session_interface = EncryptedCookieSessionInterface(KEYS_DIR)
         app.config.update(
-            SESSION_ENCRYPTION_KEYS_LOCATION=KEYS_DIR,
             SERVER_NAME='example.com:8080'
         )
 
@@ -89,10 +88,9 @@ class BasicFunctionalityTestCase(FlaskTestCase):
                 return self.app(environ, start_response)
 
         app = flask.Flask(__name__)
-        app.session_interface = EncryptedCookieSessionInterface()
+        app.session_interface = EncryptedCookieSessionInterface(KEYS_DIR)
         app.wsgi_app = PrefixPathMiddleware(app.wsgi_app, '/bar')
         app.config.update(
-            SESSION_ENCRYPTION_KEYS_LOCATION=KEYS_DIR,
             APPLICATION_ROOT='/bar'
         )
 
@@ -105,9 +103,8 @@ class BasicFunctionalityTestCase(FlaskTestCase):
 
     def test_session_using_session_settings(self):
         app = flask.Flask(__name__)
-        app.session_interface = EncryptedCookieSessionInterface()
+        app.session_interface = EncryptedCookieSessionInterface(KEYS_DIR)
         app.config.update(
-            SESSION_ENCRYPTION_KEYS_LOCATION=KEYS_DIR,
             SERVER_NAME='www.example.com:8080',
             APPLICATION_ROOT='/test',
             SESSION_COOKIE_DOMAIN='.example.com',
@@ -129,13 +126,15 @@ class BasicFunctionalityTestCase(FlaskTestCase):
 
     def test_missing_session(self):
         app = flask.Flask(__name__)
-        app.session_interface = EncryptedCookieSessionInterface()
+        app.session_interface = EncryptedCookieSessionInterface(KEYS_DIR_BAD)
 
         def expect_exception(f, *args, **kwargs):
             try:
                 f(*args, **kwargs)
             except RuntimeError, e:
-                self.assert_(e.args and 'session is unavailable' in e.args[0])
+                self.assert_(
+                    e.args and
+                    'EncryptedCookieSession is unavailable' in e.args[0])
             else:
                 self.assert_(False, 'expected exception')
         with app.test_request_context():
@@ -146,8 +145,7 @@ class BasicFunctionalityTestCase(FlaskTestCase):
     def test_session_expiration(self):
         permanent = True
         app = flask.Flask(__name__)
-        app.session_interface = EncryptedCookieSessionInterface()
-        app.config.update(SESSION_ENCRYPTION_KEYS_LOCATION=KEYS_DIR)
+        app.session_interface = EncryptedCookieSessionInterface(KEYS_DIR)
 
         @app.route('/')
         def index():
@@ -180,8 +178,7 @@ class BasicFunctionalityTestCase(FlaskTestCase):
 
     def test_flashes(self):
         app = flask.Flask(__name__)
-        app.session_interface = EncryptedCookieSessionInterface()
-        app.config.update(SESSION_ENCRYPTION_KEYS_LOCATION=KEYS_DIR)
+        app.session_interface = EncryptedCookieSessionInterface(KEYS_DIR)
 
         with app.test_request_context():
             self.assert_(not flask.session.modified)

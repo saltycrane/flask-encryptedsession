@@ -4,7 +4,7 @@ from setuptools import setup, find_packages
 
 setup(
     name='Flask-EncryptedSession',
-    version='0.2.0',
+    version='0.2.1',
     url='http://github.com/saltycrane/flask-encryptedsession/',
     license='BSD',
     author='Eliot',

@@ -25,8 +25,10 @@ from flask_encryptedsession.encryptedsession import (
 
 KEYS_DIR = os.path.join(
     os.path.abspath(os.path.dirname(__file__)), 'testkeys')
-KEYS_DIR_BAD = os.path.join(
-    os.path.abspath(os.path.dirname(__file__)), 'testkeys_bad')
+KEYS_DIR_BADKEY = os.path.join(
+    os.path.abspath(os.path.dirname(__file__)), 'testkeys_badkey')
+KEYS_DIR_NONEXISTENT = os.path.join(
+    os.path.abspath(os.path.dirname(__file__)), 'testkeys_nonexistent')
 
 
 class BasicFunctionalityTestCase(FlaskTestCase):
@@ -46,6 +48,24 @@ class BasicFunctionalityTestCase(FlaskTestCase):
         c = app.test_client()
         self.assert_equal(c.post('/set', data={'value': '42'}).data, 'value set')
         self.assert_equal(c.get('/get').data, '42')
+
+    def test_bad_key(self):
+        app = flask.Flask(__name__)
+        app.session_interface = EncryptedCookieSessionInterface(KEYS_DIR)
+
+        @app.route('/set', methods=['POST'])
+        def set():
+            flask.session['value'] = flask.request.form['value']
+            return 'value set'
+
+        @app.route('/get')
+        def get():
+            return flask.session.get('value', 'value is not there')
+
+        c = app.test_client()
+        self.assert_equal(c.post('/set', data={'value': '42'}).data, 'value set')
+        app.session_interface = EncryptedCookieSessionInterface(KEYS_DIR_BADKEY)
+        self.assert_equal(c.get('/get').data, 'value is not there')
 
     def test_session_using_server_name(self):
         app = flask.Flask(__name__)
@@ -126,7 +146,8 @@ class BasicFunctionalityTestCase(FlaskTestCase):
 
     def test_missing_session(self):
         app = flask.Flask(__name__)
-        app.session_interface = EncryptedCookieSessionInterface(KEYS_DIR_BAD)
+        app.session_interface = EncryptedCookieSessionInterface(
+            KEYS_DIR_NONEXISTENT)
 
         def expect_exception(f, *args, **kwargs):
             try:

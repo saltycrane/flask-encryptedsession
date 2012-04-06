@@ -142,9 +142,6 @@ class EncryptedCookie(SecureCookie):
         :param expires: an optional expiration date for the cookie (a
                         :class:`datetime.datetime` object)
         """
-        if self.crypter is None:
-            raise RuntimeError(
-                'Crypter has not been initialized with the keys location.')
         if expires:
             self['_expires'] = _date_to_unix(expires)
         result = self.serialization_method.dumps(dict(self))
@@ -162,13 +159,12 @@ class EncryptedCookie(SecureCookie):
         if isinstance(string, unicode):
             string = string.encode('utf-8', 'replace')
 
+        crypter = cls._get_crypter(crypter_or_keys_location)
         try:
-            crypter = cls._get_crypter(crypter_or_keys_location)
             data = crypter.Decrypt(string)
         except:
-            # fail silently and return new empty EncryptedCookie object
+            # if decryption fails, return new empty EncryptedCookie object
             items = ()
-            crypter = None
         else:
             items = cls.serialization_method.loads(data)
             # check if cookie is expired

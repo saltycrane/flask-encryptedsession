@@ -20,8 +20,10 @@ from flask_encryptedsession.encryptedcookie import EncryptedCookie
 
 KEYS_DIR = os.path.join(
     os.path.abspath(os.path.dirname(__file__)), 'testkeys')
-KEYS_DIR_BAD = os.path.join(
-    os.path.abspath(os.path.dirname(__file__)), 'testkeys_bad')
+KEYS_DIR_BADKEY = os.path.join(
+    os.path.abspath(os.path.dirname(__file__)), 'testkeys_badkey')
+KEYS_DIR_NONEXISTENT = os.path.join(
+    os.path.abspath(os.path.dirname(__file__)), 'testkeys_nonexistent')
 
 
 class EncryptedCookieTestCase(WerkzeugTestCase):
@@ -43,10 +45,18 @@ class EncryptedCookieTestCase(WerkzeugTestCase):
         assert not c2.should_save
         assert c2 == c
 
-        c3 = EncryptedCookie.unserialize(s, KEYS_DIR_BAD)
+        c3 = EncryptedCookie.unserialize(s, KEYS_DIR_BADKEY)
         assert not c3.modified
         assert not c3.new
         assert c3 == {}
+
+    def test_fail_to_read_keys(self):
+        self.assert_raises(
+            Exception, EncryptedCookie,
+            crypter_or_keys_location=KEYS_DIR_NONEXISTENT)
+        self.assert_raises(
+            Exception, EncryptedCookie.unserialize, 'some string',
+            KEYS_DIR_NONEXISTENT)
 
     def test_wrapper_support(self):
         req = Request.from_values()
